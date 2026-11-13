@@ -4,9 +4,9 @@ const path = require('path');
 const multer = require('multer');
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 const DATA_FILE = path.join(__dirname, 'properties.json');
-const UPLOAD_DIR = path.join(__dirname, 'public', 'uploads');
+const UPLOAD_DIR = path.join(__dirname, 'uploads');
 
 // Ensure uploads directory exists
 if (!fs.existsSync(UPLOAD_DIR)) {
@@ -20,9 +20,10 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-// Middleware
+// Middleware - Serve static files from the root directory and uploads folder
 app.use(express.json());
-app.use(express.static('public'));
+app.use(express.static(__dirname));
+app.use('/uploads', express.static(UPLOAD_DIR));
 
 function getStoredProperties() {
     if (!fs.existsSync(DATA_FILE)) return [];
@@ -36,6 +37,11 @@ function getStoredProperties() {
 function saveProperties(properties) {
     fs.writeFileSync(DATA_FILE, JSON.stringify(properties, null, 2), 'utf8');
 }
+
+// Serve index.html on the main homepage route
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
 
 // GET Route - Fetch all properties
 app.get('/api/properties', (req, res) => {
@@ -103,5 +109,5 @@ app.delete('/api/properties/:id', (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`Server is running live at http://localhost:${PORT}`);
+    console.log(`Server is running live on port ${PORT}`);
 });
