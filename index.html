@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Homax Estates | Premium Living</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #f4f4f9; color: #333; }
+        header { text-align: center; margin-bottom: 30px; padding-top: 10px; }
+        header h1 { color: #111; margin: 0 0 6px 0; }
+        header p { color: #666; margin: 0 0 15px 0; font-size: 15px; }
+        #adminHeaderBtn { background: #343a40; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: bold; }
+        #adminHeaderBtn:hover { background: #23272b; }
+        .form-container, .filter-bar { background: white; padding: 24px; max-width: 650px; margin: 0 auto 20px auto; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+        input, select, textarea, button { display: block; width: 100%; margin-bottom: 12px; padding: 12px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; }
+        button { background: #007bff; color: white; border: none; font-weight: bold; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .filter-bar { display: flex; gap: 10px; padding: 16px; max-width: 1068px; }
+        .filter-bar input, .filter-bar select { margin-bottom: 0; }
+        .property-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; max-width: 1100px; margin: 0 auto; }
+        .property-card { background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 6px rgba(0,0,0,0.1); display: flex; flex-direction: column; position: relative; }
+        .badge { position: absolute; top: 12px; right: 12px; background: #111; color: #fff; padding: 4px 10px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+        .property-card img { width: 100%; height: 180px; object-fit: cover; background: #eee; }
+        .property-info { padding: 16px; flex-grow: 1; }
+        .property-info h4 { margin: 0 0 8px 0; font-size: 18px; color: #222; }
+        .property-info p { margin: 4px 0; color: #555; font-size: 14px; }
+        .price { font-size: 16px; font-weight: bold; color: #28a745; margin-top: 8px !important; }
+        footer { text-align: center; margin-top: 50px; padding: 20px; color: #777; font-size: 13px; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Homax Estates</h1>
+        <p>Verified Residential & Commercial Properties in Navi Mumbai</p>
+        <button id="adminHeaderBtn" onclick="handleAdminClick()">Admin Login</button>
+    </header>
+
+    <!-- Admin Only: Add/Edit Property Form -->
+    <div id="adminFormSection" class="form-container" style="display: none;">
+        <h3 id="formTitle" style="margin-top: 0;">Add New Property Listing</h3>
+        <form id="propertyForm">
+            <input type="text" id="title" placeholder="Property Title (e.g., Bhaveshwar Heights)" required>
+            <div style="display: flex; gap: 10px;">
+                <input type="number" id="price" placeholder="Price in ₹ (e.g., 8500000)" required>
+                <select id="bhk">
+                    <option value="1 RK">1 RK</option>
+                    <option value="1 BHK">1 BHK</option>
+                    <option value="2 BHK" selected>2 BHK</option>
+                    <option value="3 BHK">3 BHK</option>
+                    <option value="Villa / Plot">Villa / Plot</option>
+                </select>
+            </div>
+            <input type="text" id="location" placeholder="Location (e.g., Kharghar, Panvel)" required>
+            <label id="imageLabel" style="font-size: 13px; color: #555; margin-bottom: 4px; display: block;">Upload Property Photo:</label>
+            <input type="file" id="imageFile" accept="image/*">
+            <textarea id="description" rows="3" placeholder="Description (e.g., Near metro station, OC received)" required></textarea>
+            <button type="submit" id="submitBtn" style="background: #007bff;">Publish Property</button>
+            <button type="button" id="cancelEditBtn" onclick="resetForm()" style="background: #6c757d; display: none; margin-top: 6px;">Cancel Edit</button>
+        </form>
+    </div>
+
+    <!-- Search & Sort Filter Bar -->
+    <div class="filter-bar">
+        <input type="text" id="searchInput" placeholder="Search by location, BHK, or project name..." style="flex: 2;">
+        <select id="sortPrice" style="flex: 1;">
+            <option value="newest">Sort: Newest First</option>
+            <option value="low-high">Price: Low to High</option>
+            <option value="high-low">Price: High to Low</option>
+        </select>
+    </div>
+
+    <!-- Property Listings Display -->
+    <div id="propertyList" class="property-grid">Loading properties...</div>
+
+    <footer>
+        <p>&copy; 2026 Homax Estates. All Rights Reserved.</p>
+    </footer>
+
+    <script>
+        let allProperties = [];
+        let isAdmin = localStorage.getItem('homaxAdmin') === 'true';
+        let editingId = null; // Tracks if we are editing an existing property
+        const ADMIN_PIN = "1234";
+
+        function updateAdminUI() {
+            const formSection = document.getElementById('adminFormSection');
+            const adminBtn = document.getElementById('adminHeaderBtn');
+
+            if (isAdmin) {
+                formSection.style.display = 'block';
+                adminBtn.innerText = 'Logout Admin';
+                adminBtn.style.background = '#dc3545';
+            } else {
+                formSection.style.display = 'none';
+                adminBtn.innerText = 'Admin Login';
+                adminBtn.style.background = '#343a40';
+                resetForm();
+            }
+            applyFilters();
+        }
+
+        function handleAdminClick() {
+            if (isAdmin) {
+                isAdmin = false;
+                localStorage.removeItem('homaxAdmin');
+                updateAdminUI();
+            } else {
+                const pin = prompt("Enter Admin PIN:");
+                if (pin === ADMIN_PIN) {
+                    isAdmin = true;
+                    localStorage.setItem('homaxAdmin', 'true');
+                    updateAdminUI();
+                } else if (pin !== null) {
+                    alert("Incorrect PIN.");
+                }
+            }
+        }
+
+        async function fetchProperties() {
+            const response = await fetch('/api/properties');
+            allProperties = await response.json();
+            applyFilters();
+        }
+
+        function applyFilters() {
+            const query = document.getElementById('searchInput').value.toLowerCase();
+            const sortOrder = document.getElementById('sortPrice').value;
+
+            let filtered = allProperties.filter(p => 
+                p.title.toLowerCase().includes(query) || 
+                p.location.toLowerCase().includes(query) ||
+                (p.bhk && p.bhk.toLowerCase().includes(query))
+            );
+
+            if (sortOrder === 'low-high') {
+                filtered.sort((a, b) => a.price - b.price);
+            } else if (sortOrder === 'high-low') {
+                filtered.sort((a, b) => b.price - a.price);
+            }
+
+            renderProperties(filtered);
+        }
+
+        function renderProperties(properties) {
+            const listDiv = document.getElementById('propertyList');
+            if (properties.length === 0) {
+                listDiv.innerHTML = '<p style="grid-column: 1/-1; text-align: center;">No properties found.</p>';
+                return;
+            }
+
+            listDiv.innerHTML = properties.map(p => {
+                const whatsappMessage = encodeURIComponent(
+                    `Hi, I am interested in your property listing:\n*${p.title}* (${p.bhk || ''})\nLocation: ${p.location}\nPrice: ₹${Number(p.price).toLocaleString('en-IN')}\nPlease share more details.`
+                );
+
+                let adminActions = '';
+                if (isAdmin) {
+                    adminActions = `
+                        <div style="display: flex; gap: 8px; margin-top: 12px;">
+                            <button onclick="editProperty('${p.id}')" style="background: #ffc107; color: #000; padding: 8px; flex: 1; margin-top: 0;">Edit</button>
+                            <button onclick="deleteProperty('${p.id}')" style="background: #dc3545; padding: 8px; flex: 1; margin-top: 0;">Delete</button>
+                        </div>
+                    `;
+                }
+
+                return `
+                    <div class="property-card">
+                        <span class="badge">${p.bhk || 'Property'}</span>
+                        <img src="${p.imageUrl}" alt="${p.title}" onerror="this.src='https://via.placeholder.com/400x250?text=Homax+Estates'">
+                        <div class="property-info">
+                            <h4>${p.title}</h4>
+                            <p><strong>Location:</strong> ${p.location}</p>
+                            <p class="price">₹${Number(p.price).toLocaleString('en-IN')}</p>
+                            <p>${p.description}</p>
+                            <a href="https://wa.me/?text=${whatsappMessage}" target="_blank" style="display: block; text-align: center; background: #25d366; color: white; padding: 10px; border-radius: 6px; text-decoration: none; font-weight: bold; margin-top: 12px;">
+                                Chat on WhatsApp
+                            </a>
+                            ${adminActions}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Load property details into the form for editing
+        function editProperty(id) {
+            const property = allProperties.find(p => p.id === id);
+            if (!property) return;
+
+            editingId = id;
+            document.getElementById('title').value = property.title;
+            document.getElementById('price').value = property.price;
+            document.getElementById('bhk').value = property.bhk || '2 BHK';
+            document.getElementById('location').value = property.location;
+            document.getElementById('description').value = property.description;
+
+            document.getElementById('formTitle').innerText = 'Edit Property Listing';
+            document.getElementById('submitBtn').innerText = 'Update Property';
+            document.getElementById('cancelEditBtn').style.display = 'block';
+            document.getElementById('imageLabel').innerText = 'Upload New Photo (Optional):';
+
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function resetForm() {
+            editingId = null;
+            document.getElementById('propertyForm').reset();
+            document.getElementById('formTitle').innerText = 'Add New Property Listing';
+            document.getElementById('submitBtn').innerText = 'Publish Property';
+            document.getElementById('cancelEditBtn').style.display = 'none';
+            document.getElementById('imageLabel').innerText = 'Upload Property Photo:';
+        }
+
+        document.getElementById('searchInput').addEventListener('input', applyFilters);
+        document.getElementById('sortPrice').addEventListener('change', applyFilters);
+
+        // Handle Submit for both Create (POST) and Edit (PUT)
+        document.getElementById('propertyForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData();
+            formData.append('title', document.getElementById('title').value);
+            formData.append('price', document.getElementById('price').value);
+            formData.append('bhk', document.getElementById('bhk').value);
+            formData.append('location', document.getElementById('location').value);
+            
+            const imageFile = document.getElementById('imageFile').files[0];
+            if (imageFile) {
+                formData.append('imageFile', imageFile);
+            }
+            formData.append('description', document.getElementById('description').value);
+
+            const url = editingId ? `/api/properties/${editingId}` : '/api/properties';
+            const method = editingId ? 'PUT' : 'POST';
+
+            const response = await fetch(url, {
+                method: method,
+                body: formData
+            });
+
+            if (response.ok) {
+                resetForm();
+                fetchProperties();
+            } else {
+                alert('Failed to save property.');
+            }
+        });
+
+        async function deleteProperty(id) {
+            if (!confirm('Are you sure you want to remove this listing?')) return;
+            const response = await fetch(`/api/properties/${id}`, { method: 'DELETE' });
+            if (response.ok) fetchProperties();
+        }
+
+        updateAdminUI();
+        fetchProperties();
+    </script>
+</body>
+</html>
