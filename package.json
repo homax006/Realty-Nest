@@ -1,19 +1,16 @@
 {
-  "name": "my-dynamic-website",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "name": "realty-nest",
+  "version": "1.1.0",
+  "description": "Realty Nest Real Estate Portal",
+  "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node server.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
   "dependencies": {
-    "express": "^5.3.0",
-    "mongoose": "^9.12.0",
-    "multer": "^2.5.0"
+    "cloudinary": "^2.5.1",
+    "express": "^4.21.2",
+    "mongoose": "^8.9.5",
+    "multer": "^1.4.5-lts.1",
+    "multer-storage-cloudinary-v2": "^1.0.3"
   }
 }
