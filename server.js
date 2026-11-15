@@ -3,7 +3,6 @@ const path = require('path');
 const mongoose = require('mongoose');
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
-const { CloudinaryStorage } = require('multer-storage-cloudinary-v2');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -15,22 +14,29 @@ cloudinary.config({
     api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
-// 2. Configure Multer + Cloudinary Storage
-const storage = new CloudinaryStorage({
-    cloudinary: cloudinary,
-    params: {
-        folder: 'realty-nest-properties',
-        allowed_formats: ['jpg', 'jpeg', 'png', 'webp']
-    }
-});
-const upload = multer({ storage });
+// 2. Use Multer Memory Storage (avoids storage-plugin version bugs)
+const upload = multer({ storage: multer.memoryStorage() });
+
+// Helper function to stream image buffer directly to Cloudinary
+function uploadToCloudinary(fileBuffer) {
+    return new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+            { folder: 'realty-nest-properties' },
+            (error, result) => {
+                if (error) return reject(error);
+                resolve(result.secure_url);
+            }
+        );
+        stream.end(fileBuffer);
+    });
+}
 
 // 3. Connect to MongoDB Atlas
 mongoose.connect(process.env.MONGODB_URI)
     .then(() => console.log('Connected to MongoDB Atlas'))
     .catch(err => console.error('MongoDB connection error:', err));
 
-// 4. Define Property Schema (matches existing frontend structure)
+// 4. Define Property Schema
 const propertySchema = new mongoose.Schema({
     title: { type: String, required: true },
     price: { type: Number, required: true },
@@ -41,7 +47,6 @@ const propertySchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
 });
 
-// Ensure frontend receives `id` cleanly alongside `_id`
 propertySchema.set('toJSON', {
     virtuals: true,
     versionKey: false,
@@ -56,17 +61,17 @@ const Property = mongoose.model('Property', propertySchema);
 app.use(express.json());
 app.use(express.static(__dirname));
 
-// Serve index.html on homepage
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// GET Route - Fetch all properties (newest first)
+// GET Route - Fetch all properties
 app.get('/api/properties', async (req, res) => {
     try {
         const properties = await Property.find().sort({ createdAt: -1 });
         res.json(properties);
     } catch (err) {
+        console.error('Fetch error:', err);
         res.status(500).json({ message: 'Error fetching properties', error: err.message });
     }
 });
@@ -75,9 +80,11 @@ app.get('/api/properties', async (req, res) => {
 app.post('/api/properties', upload.single('imageFile'), async (req, res) => {
     try {
         const { title, price, location, bhk, description } = req.body;
-        const imageUrl = req.file && req.file.path
-            ? req.file.path
-            : 'https://via.placeholder.com/400x250?text=Realty+Nest';
+        let imageUrl = 'https://via.placeholder.com/400x250?text=Realty+Nest';
+
+        if (req.file) {
+            imageUrl = await uploadToCloudinary(req.file.buffer);
+        }
 
         const newProperty = new Property({
             title,
@@ -91,7 +98,8 @@ app.post('/api/properties', upload.single('imageFile'), async (req, res) => {
         const savedProperty = await newProperty.save();
         res.status(201).json({ message: 'Property listed successfully!', savedProperty });
     } catch (err) {
-        res.status(500).json({ message: 'Error saving property', error: err.message });
+        console.error('Save error:', err);
+        res.status(500).json({ message: 'Error saving property', error: err.message || err });
     }
 });
 
@@ -110,14 +118,16 @@ app.put('/api/properties/:id', upload.single('imageFile'), async (req, res) => {
         existing.location = location;
         existing.bhk = bhk || existing.bhk;
         existing.description = description;
-        if (req.file && req.file.path) {
-            existing.imageUrl = req.file.path;
+
+        if (req.file) {
+            existing.imageUrl = await uploadToCloudinary(req.file.buffer);
         }
 
         const updatedProperty = await existing.save();
         res.json({ message: 'Property updated successfully!', updatedProperty });
     } catch (err) {
-        res.status(500).json({ message: 'Error updating property', error: err.message });
+        console.error('Update error:', err);
+        res.status(500).json({ message: 'Error updating property', error: err.message || err });
     }
 });
 
@@ -127,6 +137,7 @@ app.delete('/api/properties/:id', async (req, res) => {
         await Property.findByIdAndDelete(req.params.id);
         res.json({ message: 'Property deleted successfully!' });
     } catch (err) {
+        console.error('Delete error:', err);
         res.status(500).json({ message: 'Error deleting property', error: err.message });
     }
 });
