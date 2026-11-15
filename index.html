@@ -239,11 +239,12 @@
             });
 
             if (response.ok) {
-                resetForm();
-                fetchProperties();
+                     resetForm();
+                     fetchProperties();
             } else {
-                alert('Failed to save property.');
-            }
+             const errData = await response.json().catch(() => ({}));
+             alert('Error: ' + (errData.error?.message || JSON.stringify(errData.error) || errData.message || 'Unknown error'));
+                }
         });
 
         async function deleteProperty(id) {
