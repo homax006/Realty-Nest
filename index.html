@@ -158,8 +158,8 @@
                 if (isAdmin) {
                     adminActions = `
                         <div style="display: flex; gap: 8px; margin-top: 12px;">
-                            <button onclick="editProperty('${p.id}')" style="background: #ffc107; color: #000; padding: 8px; flex: 1; margin-top: 0;">Edit</button>
-                            <button onclick="deleteProperty('${p.id}')" style="background: #dc3545; padding: 8px; flex: 1; margin-top: 0;">Delete</button>
+                            <button onclick="editProperty('${p._id || p.id}')" style="background: #ffc107; color: #000; padding: 8px; flex: 1; margin-top: 0;">Edit</button>
+                            <button onclick="deleteProperty('${p._id || p.id}')" style="background: #dc3545; padding: 8px; flex: 1; margin-top: 0;">Delete</button>
                         </div>
                     `;
                 }
@@ -185,7 +185,7 @@
 
         // Load property details into the form for editing
         function editProperty(id) {
-            const property = allProperties.find(p => p.id === id);
+           const property = allProperties.find(p => (p._id || p.id) === id);
             if (!property) return;
 
             editingId = id;
